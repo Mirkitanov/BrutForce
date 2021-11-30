@@ -17,6 +17,25 @@ class LogInViewController: UIViewController {
     
     private let wrapperView = UIView()
     
+    private var isPickUpPassword = false
+    
+    private var pickUpPasswordText: String = ""
+    
+    private lazy var pickUpPassword: UIButton = {
+        let button = UIButton()
+        button.setTitle("Подобрать пароль", for: .normal)
+        button.setTitleColor(.white, for: .normal)
+        button.setBackgroundImage(#imageLiteral(resourceName: "blue_pixel"), for: .normal)
+        button.setBackgroundImage(#imageLiteral(resourceName: "blue_pixel").alpha(0.8), for: .selected)
+        button.setBackgroundImage(#imageLiteral(resourceName: "blue_pixel").alpha(0.8), for: .highlighted)
+        button.layer.cornerRadius = 10
+        button.layer.masksToBounds = true
+        button.clipsToBounds = true
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.addTarget(self, action: #selector(pickUpPass), for: .touchUpInside)
+        return button
+    }()
+    
     var authorizationDelegate: LoginViewControllerDelegate?
     
     var warning: UILabel = {
@@ -29,6 +48,11 @@ class LogInViewController: UIViewController {
         return label
     }()
     
+    let spinner: UIActivityIndicatorView = {
+        let spinner = UIActivityIndicatorView(style: .medium)
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        return spinner
+    }()
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -37,7 +61,6 @@ class LogInViewController: UIViewController {
     }
     
     private func setupViews(){
-        
         navigationController?.navigationBar.isHidden = true
         let longLine: UIView = {
             let line = UIView()
@@ -45,7 +68,6 @@ class LogInViewController: UIViewController {
             line.translatesAutoresizingMaskIntoConstraints = false
             return line
         }()
-        
         
         logInScrollView.translatesAutoresizingMaskIntoConstraints = false
         wrapperView.translatesAutoresizingMaskIntoConstraints = false
@@ -87,6 +109,8 @@ class LogInViewController: UIViewController {
                                 passwordTextField,
                                 logInButton,
                                 longLine,
+                                pickUpPassword,
+                                spinner,
                                 warning
         )
         
@@ -124,10 +148,42 @@ class LogInViewController: UIViewController {
             longLine.bottomAnchor.constraint(equalTo: bigFieldForTwoTextFieldsImageView.bottomAnchor, constant: -49.75),
             
             warning.topAnchor.constraint(equalTo: logoImageView.bottomAnchor, constant: 20),
-            warning.centerXAnchor.constraint(equalTo: wrapperView.centerXAnchor)
+            warning.centerXAnchor.constraint(equalTo: wrapperView.centerXAnchor),
+            
+            logInButton.topAnchor.constraint(equalTo: bigFieldForTwoTextFieldsImageView.bottomAnchor, constant: 16),
+            logInButton.leadingAnchor.constraint(equalTo: wrapperView.leadingAnchor, constant: 16),
+            logInButton.trailingAnchor.constraint(equalTo: wrapperView.trailingAnchor, constant: -16),
+            logInButton.heightAnchor.constraint(equalToConstant: 50),
+            
+            pickUpPassword.topAnchor.constraint(equalTo: logInButton.bottomAnchor, constant: 16),
+            pickUpPassword.leadingAnchor.constraint(equalTo: wrapperView.leadingAnchor, constant: 16),
+            pickUpPassword.trailingAnchor.constraint(equalTo: wrapperView.trailingAnchor, constant: -16),
+            pickUpPassword.heightAnchor.constraint(equalToConstant: 50),
+            
+            spinner.topAnchor.constraint(equalTo: pickUpPassword.bottomAnchor, constant: 16),
+            spinner.leadingAnchor.constraint(equalTo: wrapperView.leadingAnchor, constant: 16),
+            spinner.trailingAnchor.constraint(equalTo: wrapperView.trailingAnchor, constant: -16),
+            spinner.widthAnchor.constraint(equalToConstant: 50),
+            spinner.bottomAnchor.constraint(equalTo: wrapperView.bottomAnchor),
             ]
         
         NSLayoutConstraint.activate(constraints)
+    }
+    
+    @objc private func pickUpPass() {
+        spinner.startAnimating()
+        isPickUpPassword = true
+        let operationQueue = OperationQueue()
+        operationQueue.qualityOfService = .background
+        let operation = BruteForceOperation(passField: passwordTextField, spinner: spinner)
+        
+        operationQueue.addOperation(operation)
+        
+        DispatchQueue.global().async {
+            while !operation.isFinished {
+                self.pickUpPasswordText = operation.bruteForceTextString
+            }
+        }
     }
     
     // MARK: - Keyboard observers
@@ -166,27 +222,42 @@ class LogInViewController: UIViewController {
             warning.text = "Authorization delegate is nil"
             return
         }
+        
         /// Check that login is not empty
         guard let login = emailOrPhoneTextField.text, login != "" else {
             warning.text = "Please input login"
             return
         }
+        
+        /// Check login
+        if !delegate.checkLogin(login) {
+            warning.text = "Login is wrong"
+            return
+        }
+        
         /// Check that password is not empty
         guard let password = passwordTextField.text, password != "" else {
             warning.text = "Please input password"
             return
         }
-        /// Check login and password
-        if !delegate.checkLogin(login) || !delegate.checkPassword(password) {
-            warning.text = "Login or password wrong"
-            return
+        
+        /// Check password
+        if !delegate.checkPassword(password) {
+            if !isPickUpPassword {
+                warning.text = "Password wrong"
+                return
+            } else if pickUpPasswordText != password {
+                warning.text = "Password wrong 2"
+                print("pickUpPasswordText =", pickUpPasswordText)
+                print("password =", password)
+                return
+            }
         }
        
         // Go to PostsViewController
         let postsViewController = UIStoryboard(name: "Main", bundle: nil).instantiateViewController(identifier: "PostsViewController")
         navigationController?.pushViewController(postsViewController, animated: true)
     }
-    
 }
 
     extension UIImage {
